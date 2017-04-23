@@ -15,12 +15,12 @@ new_off:	.space 4 #offset pliku wyjściowego
 padd:		.space 1 #ilosc bitow paddingowych wczytywaneog pliku
 new_padd:	.space 1 #ilosc bitow paddingowych pliku wyjsciowego
 msg:		.asciiz "Marta Pacuszka - zmniejszanie obrazka\n"
-input:		.asciiz	"/home/marta/arko/proj/in.bmp"
-output:		.asciiz "/home/marta/arko/proj/out.bmp"
+input:		.asciiz	"/home/marta/arko/projekt/motyl.bmp"
+output:		.asciiz "/home/marta/arko/projekt/out3.bmp"
 err1:		.asciiz "Blad odczytu pliku zrodlowego\n"
 err2:		.asciiz "Blad tworzenia pliku docelowego\n"
 		.text
-main:	la $a0, hello	# wczytanie adresu stringa msg do rejestru a0
+main:	la $a0, msg	# wczytanie adresu stringa msg do rejestru a0
 	li $v0, 4	# ustawienie syscall na wypisywanie stringa
 	syscall		# wypisanie na ekranie zawartosci stringa msg
 
@@ -331,7 +331,7 @@ etap_przejsciowy:
 
 	# do $s3 zapiszę ilość pikseli wejściowych do przerobienia
 	lw $s3, height 		
-	mul $s3, $t5, $s3	# width*height
+	mul $s3, $t5, $s3	# width*height #########################czy tu jest ok?
 	addi $s3, $s3, -1 
 	
 	# licznik szerokosci wejsciowej
@@ -373,7 +373,7 @@ przypadek3:
 	mul $t7, $s2, $t4 	#r * licznik we 
 	add $a2, $a2, $t7
 	
-	beqz $s3, ustalenie_parametrow_pocz_wys #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
+	beqz $s3, etap_koncowy #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
 	
 	jal przesun_wsk_we_szerokosc
 	jal przesun_wsk_wy_szerokosc
@@ -389,7 +389,7 @@ przypadek1:
 	mul $t7, $s2, $t4 	#r * licznik we 
 	add $a2, $a2, $t7
 	
-	beqz $s3, ustalenie_parametrow_pocz_wys #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
+	beqz $s3, etap_koncowy #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
 	jal przesun_wsk_we_szerokosc
 	j wczytaj_pixel
 	
@@ -404,7 +404,7 @@ przypadek2:
 	mul $t7, $s2, $t5 	#r * licznik_wy 
 	add $a2, $a2, $t7
 	
-	beqz $s3, ustalenie_parametrow_pocz_wys 	#ilość pikseli do przerobienia = 0 to zapisz plik
+	beqz $s3, etap_koncowy 	#ilość pikseli do przerobienia = 0 to zapisz plik
 	
 	jal przesun_wsk_wy_szerokosc
 	j oblicz_nowy_piksel
@@ -416,7 +416,7 @@ przesun_wsk_we_szerokosc:
 	j CDprzesun_wsk_we_szerokosc
 
 omin_padding_we:
-	add $t8, $t8, $t0
+	add $t8, $t8, $a3
 	lw $s4, width		#licznik szerokosci
 	
 CDprzesun_wsk_we_szerokosc:
@@ -446,7 +446,7 @@ przesun_wsk_wy_szerokosc:
 	j CDprzesun_wsk_wy_szerokosc
 
 omin_padding_wy:
-	add $t9, $t9, $a3
+	add $t9, $t9, $t0
 	lw $s5, new_width	#licznik szerokosci
 	
 CDprzesun_wsk_wy_szerokosc:
@@ -506,9 +506,12 @@ etap_koncowy:
 	lw $t4, new_height 	# licznik wejsciowy
 	lw $t5, height 		# liczniik wyjsciowy
 
-	# do $s3 zapiszę ilość pikseli przejsciowych do przerobienia
-	lw $s3, height 		
-	mul $s3, $t5, $s3	# width*height
+	lw $k0, new_width		# liczniki ile szerokosci jeszcze zostalo - aby wiedziec o ile sie przesuwac
+	add $k1, $k0, $zero		# $k0 dla przejsciowego, $k1 dla wyjsciowego
+	
+	
+	# do $s3 zapiszę ilość pikseli przejsciowych do przerobienia		
+	mul $s3, $t5, $k0	# new_width*height
 	addi $s3, $s3, -1 
 	
 	# licznik wysokosci przejsciowej
@@ -517,21 +520,23 @@ etap_koncowy:
 	# licznik wysokosci wyjsciowej
 	add $s5, $t4, -1	#jesli licznik = 0 to przejdz do nast linijki
 	
-	lw $k0, new_width		#licznik ile szerokosci jeszcze zostalo - aby wiedziec o ile sie przesuwac
-	subiu $k0, $k0, 1
-	lw $k1, new_width		#licznik ile szerokosci jeszcze zostalo - aby wiedziec o ile sie przesuwac
-	subiu $k1, $k1, 1
+	# do rejestru $t6 wklejam zawartosc $k0 zeby potem niepotrzebnie nie ladowac z pamieci raz jeszcze
+	add $t6, $k0, $zero	# $t6 bedzie sluzylo do wyliczenia szerokosci linijki
+	
+	# liczniki szerokosci
+	add $k0, $k0, -1 	# od licznikow szerokosci odejmuje 1 bo sa sprawdzane czy = 0 przed zmniejszeniem
+	add $k1, $k1, -1
 	
 	li $a0, 0 		#srednia blue = 0
 	li $a1, 0 		#srednia dla green = 0
 	li $a2, 0 		#srednia dla red = 0
 	
 	# licze dlugosc linijki w pliku wyjsciowym ($t6)
-	lw $t6, new_width
+	# w $t6 jest juz zaladowane new_width
 	mulu $t6, $t6, 3
 	lb $t7, new_padd
 	add $t6, $t6, $t7	# przesuniecie=pozostala szerokosc * 3  + new_padd
-	subiu $t6, $t6, 2
+	add $t6, $t6, -2	# bo przesuwam sie z 3go bajtu ostatniego piksela na 1szy bajt pierwszego w linijce
 
 	
 wczytaj_pixel_2:
@@ -563,7 +568,7 @@ przypadek3_2:
 	mul $t7, $s2, $t4 	#r * licznik we 
 	add $a2, $a2, $t7
 	
-	beqz $s3, zapisz_plik #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
+	beqz $s3, zapisz_plik #ilość pikseli do przerobienia = 0 -> koniec!
 	
 	jal przesun_wsk_we_2
 	jal przesun_wsk_wy_2
@@ -579,9 +584,10 @@ przypadek1_2:
 	mul $t7, $s2, $t4 	#r * licznik we 
 	add $a2, $a2, $t7
 	
-	beqz $s3, zapisz_plik #ilość pikseli do przerobienia = 0 -> przechodzimy do skalowania po wysokości
+	beqz $s3, zapisz_plik #ilość pikseli do przerobienia = 0 -> zero!
+	
 	jal przesun_wsk_we_2
-	j wczytaj_pixel
+	j wczytaj_pixel_2
 	
 przypadek2_2:
 
@@ -594,54 +600,59 @@ przypadek2_2:
 	mul $t7, $s2, $t5 	#r * licznik_wy 
 	add $a2, $a2, $t7
 	
-	beqz $s3, ustalenie_parametrow_pocz_wys 	#ilość pikseli do przerobienia = 0 to zapisz plik
+	beqz $s3, zapisz_plik 	#ilość pikseli do przerobienia = 0 to zapisz plik
 	
-	jal przesun_wsk_wy_szerokosc
-	j oblicz_nowy_piksel
+	jal przesun_wsk_wy_2
+	j oblicz_nowy_piksel_2
 		
 
-przesun_wsk_we_szerokosc:
+przesun_wsk_we_2:
 
-	beqz $s4, omin_padding_we #jesli licznik = 0 to przejdz do nast linijki
-	j CDprzesun_wsk_we_szerokosc
+	beqz $s4, nast_kolumna_we #jesli licznik = 0 to przejdz do nast kolumny
+	j CDprzesun_wsk_we_2
 
-omin_padding_we:
-	add $t8, $t8, $t0
-	lw $s4, width		#licznik szerokosci
+nast_kolumna_we:
+	add $t8, $t0, 3 # wskaznik na nastepna kolumne
+	add $t0, $t0, 3
+	lw $s4, height		#licznik wysokosci
+	add $s4, $s4, -1
 	
-CDprzesun_wsk_we_szerokosc:
+	lw $t4, new_height 	# licznik_we = new_height
+	add $k0, $k0, -1
+	
+	jr $ra
+	
+CDprzesun_wsk_we_2:
 	add $s4, $s4, -1	
-	#przed przesunieciem wskaźnik wskazywał na ostatni bajt piksela
-	#aby wskazywał na pierwszy bajt nowego piksela nalezy przesunac go o 1
-	addi $t8, $t8, 1 
-	lw $t4, new_width 	#licznik_we = new_width
+	add $t8, $t8, $t6	# przesuniecie wskaznika o szerokosc linii 
+	lw $t4, new_height 	# licznik we = new_height
 	jr $ra
 
-przesun_wsk_wy_szerokosc:
+przesun_wsk_wy_2:
 	#załadowanie nowo policzonego koloru pixela
-	lw $t6, width
+	lw $s6, height
 	
-	div $a0, $a0, $t6
+	div $a0, $a0, $s6
 	sb $a0, ($t9)
 	addi $t9, $t9, 1
 	
-	div $a1, $a1, $t6
+	div $a1, $a1, $s6
 	sb $a1, ($t9)
 	addi $t9, $t9, 1
 	
-	div $a2, $a2, $t6
+	div $a2, $a2, $s6
 	sb $a2, ($t9)
 	
-	beqz $s5, omin_padding_wy
-	j CDprzesun_wsk_wy_szerokosc
+	beqz $s5, nast_kolumna_wy
+	j CDprzesun_wsk_wy_2
 
-omin_padding_wy:
-	add $t9, $t9, $a3
-	lw $s5, new_width	#licznik szerokosci
+nast_kolumna_wy:
+	add $t9, $a3, 3  # przesuniecie wskaznika na kolejna kolumne
+	add $a3, $a3, 3
+	lw $s5, new_height	#licznik wysokosci
+	add $s5, $s5, -1
 	
-CDprzesun_wsk_wy_szerokosc:
-	add $s5, $s5, -1	#jesli licznik = 0 to przejdz do nast linijki
-	addi $t9, $t9, 1
+	add $k1, $k1, -1	# pozostala szerokosc
 	
 	# zerowanie srednich dla kolorow
 	li $a0, 0
@@ -649,8 +660,52 @@ CDprzesun_wsk_wy_szerokosc:
 	li $a2, 0
 	
 	addi $s3, $s3, -1 	#ilość pikseli do przerobienia
-	lw $t5, width 		#licznik wy = szerokosc wejsciowego
+	lw $t5, height 		#licznik wy = wysokosc wejsciowego
 	jr $ra
+	
+CDprzesun_wsk_wy_2:
+	
+	add $t9, $t9, $t6
+	#lw $s5, new_height	#licznik wysokosci
+	add $s5, $s5, -1
+	
+	#add $k1, $k1, -1	# pozostala szerokosc
+	
+	# zerowanie srednich dla kolorow
+	li $a0, 0
+	li $a1, 0
+	li $a2, 0
+	
+	addi $s3, $s3, -1 	#ilość pikseli do przerobienia
+	lw $t5, height 		#licznik wy = szerokosc wejsciowego
+	jr $ra
+	
+zapisz_plik:
+	
+	la $a0, output	# wczytanie nazwy pliku do otwarcia
+	li $a1, 1	# flagi otwarcia
+	li $a2, 0	# tryb otwarcia
+	li $v0, 13	# ustawienie syscall na otwieranie pliku
+	syscall		# otwarcie pliku, zostawienie w $v0 jego deskryptora
+	move $t0, $v0	# przekopiowanie deskryptora do rejestru t0
+	
+	bltz $t0, blad_plik_out	# przeskocz do blad_plik_out jesli wczytywanie sie nie powiodlo
+	
+	#zapis pikseli
+	move $a0, $t0	# przekopiowanie deskryptora do a0
+	la $a1, ($t3)	# wskazanie wczesniej zaalokowanej pamieci jako danych do zapisania
+	lw $a2, new_size	# ustawienie zapisu tylu bajtow ile ma plik
+	li $v0, 15	# ustawienie syscall na zapis do pliku
+	syscall		
+	
+	#zamknij plik
+	move $a0, $t0	# przekopiowanie deskryptora pliku do a0
+	li $v0, 16	# ustawienie syscall na zakmniecie pliku
+	syscall		# zamkniecie pliku o deskryptorze w a0
+	
+koniec:	
+	li $v0, 10	# ustawienie syscall na terminate
+	syscall		# wyjscie z programu
 
 
 blad_plik:
@@ -658,6 +713,11 @@ blad_plik:
 	li $v0, 4
 	syscall
 	j koniec	
+
+blad_plik_out:
+	la $a0, err2
+	li $v0, 4
+	syscall
+	j koniec
 	
-koniec:	li $v0, 10	# ustawienie syscall na terminate
-	syscall		# wyjscie z programu
+
